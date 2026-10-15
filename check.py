@@ -16,9 +16,9 @@ seen = set(json.loads(STATE.read_text())) if STATE.exists() else set()
 def candidates():
     for term in ("code", "coder", "coding"):
         yield from api.list_models(search=term, pipeline_tag="text-generation",
-                                   sort="created_at", direction=-1, limit=300, cardData=True)
+                                   sort="created_at", limit=300, cardData=True)
     yield from api.list_models(pipeline_tag="text-generation", sort="trending_score",
-                               direction=-1, limit=200, cardData=True)
+                               limit=200, cardData=True)
 
 def code_evals(m):
     evals = getattr(m.card_data, "eval_results", None) or []
