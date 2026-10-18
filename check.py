@@ -8,11 +8,21 @@ WEBHOOK = os.environ["DISCORD_WEBHOOK"]
 MAX_AGE = timedelta(days=30)
 SKIP_TAGS = {"lora"}  # to include LoRAs, change to: SKIP_TAGS = set()
 
+KNOWN_FAMILIES = ("stable-diffusion", "sdxl", "sd15", "sd-1", "sd3", "flux",
+                  "pony", "illustrious", "noobai")
+OFFICIAL = ("stabilityai/", "black-forest-labs/")
+
 api = HfApi()
 seen = set(json.loads(STATE.read_text())) if STATE.exists() else set()
 
 def is_derivative(m):
     return any(t.lower().startswith("base_model:") for t in (m.tags or []))
+
+def is_known_family(m):
+    if m.id.lower().startswith(OFFICIAL):
+        return False
+    text = (m.id + " " + " ".join(m.tags or [])).lower()
+    return any(k in text for k in KNOWN_FAMILIES)
 
 def candidates():
     yield from api.list_models(pipeline_tag="text-to-image", sort="created_at",
@@ -30,7 +40,7 @@ for m in candidates():
         stats["too_old"] += 1
         continue
     tags = {t.lower() for t in (m.tags or [])}
-    if is_derivative(m) or tags & SKIP_TAGS:
+    if is_derivative(m) or is_known_family(m) or tags & SKIP_TAGS:
         stats["filtered"] += 1
         continue
     hits.append(f"**{m.id}** [{m.pipeline_tag}] ({m.likes} likes, {m.downloads} downloads) <https://huggingface.co/{m.id}>")
