@@ -7,6 +7,7 @@ STATE = Path("state.json")
 WEBHOOK = os.environ["DISCORD_WEBHOOK"]
 MAX_AGE = timedelta(days=30)
 PIPELINES = ("text-to-image", "image-to-image")
+IMG_EXT = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 
 api = HfApi()
 seen = set(json.loads(STATE.read_text())) if STATE.exists() else set()
@@ -14,13 +15,24 @@ seen = set(json.loads(STATE.read_text())) if STATE.exists() else set()
 def is_derivative(m):
     return any(t.lower().startswith("base_model:") for t in (m.tags or []))
 
+def has_example_image(m):
+    files = [s.rfilename.lower() for s in (m.siblings or [])]
+    if any(f.endswith(IMG_EXT) for f in files):
+        return True
+    widget = getattr(m.card_data, "widget", None) if m.card_data else None
+    for w in (widget or []):
+        out = w.get("output") if isinstance(w, dict) else None
+        if isinstance(out, dict) and out.get("url"):
+            return True
+    return False
+
 def candidates():
     for p in PIPELINES:
         yield from api.list_models(pipeline_tag=p, sort="created_at",
-                                   limit=500, cardData=True)
+                                   limit=500, cardData=True, full=True)
 
 hits, done = [], set()
-stats = {"checked": 0, "too_old": 0, "filtered": 0, "sent": 0}
+stats = {"checked": 0, "too_old": 0, "filtered": 0, "no_image": 0, "sent": 0}
 now = datetime.now(timezone.utc)
 for m in candidates():
     if m.id in done or m.id in seen:
@@ -32,6 +44,9 @@ for m in candidates():
         continue
     if is_derivative(m):
         stats["filtered"] += 1
+        continue
+    if not has_example_image(m):
+        stats["no_image"] += 1
         continue
     hits.append(f"**{m.id}** [{m.pipeline_tag}] ({m.likes} likes, {m.downloads} downloads) <https://huggingface.co/{m.id}>")
     seen.add(m.id)
