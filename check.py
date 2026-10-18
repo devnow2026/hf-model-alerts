@@ -35,20 +35,24 @@ def candidates():
                                    limit=100, cardData=True)
 
 hits, done = [], set()
+stats = {"checked": 0, "too_old": 0, "filtered": 0, "low_traction": 0, "sent": 0}
 now = datetime.now(timezone.utc)
 for m in candidates():
     if m.id in done or m.id in seen:
         continue
     done.add(m.id)
+    stats["checked"] += 1
     if now - m.created_at > MAX_AGE:
+        stats["too_old"] += 1
         continue
     tags = {t.lower() for t in (m.tags or [])}
     if is_quantized(m) or is_derivative(m) or tags & SKIP_TAGS:
+        stats["filtered"] += 1
         continue
     if (m.likes or 0) >= MIN_LIKES or (m.downloads or 0) >= MIN_DOWNLOADS:
         hits.append(f"**{m.id}** [{m.pipeline_tag}] ({m.likes} likes, {m.downloads} downloads) https://huggingface.co/{m.id}")
         seen.add(m.id)
-
-for i in range(0, len(hits), 10):
-    requests.post(WEBHOOK, json={"content": "\n".join(hits[i:i+10])[:1990]})
-STATE.write_text(json.dumps(sorted(seen)))
+        stats["sent"] += 1
+    else:
+        stats["low_traction"] += 1
+print(stats)
