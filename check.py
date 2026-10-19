@@ -13,7 +13,10 @@ api = HfApi()
 seen = set(json.loads(STATE.read_text())) if STATE.exists() else set()
 
 def is_derivative(m):
-    return any(t.lower().startswith("base_model:") for t in (m.tags or []))
+    tags = [t.lower() for t in (m.tags or [])]
+    if "lora" in tags:
+        return False
+    return any(t.startswith("base_model:") for t in tags)
 
 def has_example_image(m):
     files = [s.rfilename.lower() for s in (m.siblings or [])]
